@@ -37,6 +37,15 @@
             <span class="field__help" id="document-help">Solo letras, números y guiones. Sirve para identificar tu turno.</span>
         </label>
         @error('document')<p class="err" role="alert">{{ $message }}</p>@enderror
+
+        <label class="choice" for="priority">
+            <input type="checkbox" id="priority" name="priority" value="1" @checked(old('priority'))>
+            <span class="choice__text">
+                <strong>Atención preferencial</strong>
+                <span>Para adulto mayor, gestante o persona con discapacidad.</span>
+            </span>
+        </label>
+
         @error('service_id')<p class="err" role="alert">{{ $message }}</p>@enderror
 
         @if ($services->isEmpty())

@@ -6,13 +6,13 @@
     <div class="bar__inner agent-head">
         <div class="brand">
             <span class="brand__mark" aria-hidden="true">T</span>
-            <span class="brand__text">
-                <span class="brand__name">{{ $counter->name }}</span>
+            <div class="brand__text">
+                <h1 class="brand__name">{{ $counter->name }}</h1>
                 <span class="brand__sub">{{ $counter->service->name }}</span>
-            </span>
+            </div>
         </div>
         <div class="bar__meta">
-            <span class="agent-user">Sesión de <strong>{{ auth()->user()->name }}</strong></span>
+            <span class="agent-user"><a class="agent-user__link" href="{{ route('agent.reports') }}">Reportes</a> · Sesión de <strong>{{ auth()->user()->name }}</strong></span>
             <form method="POST" action="{{ route('logout') }}">@csrf
                 <button class="btn btn--on-dark" type="submit">Salir</button>
             </form>

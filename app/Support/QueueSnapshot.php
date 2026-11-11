@@ -21,13 +21,24 @@ class QueueSnapshot
                 'counter' => $t->counter?->name,
                 'service' => $t->service->name,
                 'status' => $t->status,
+                'priority' => $t->priority,
             ])->values();
 
+        // La cola real se cuenta en dos grupos para respetar el orden preferencial.
         $waiting = Service::where('active', true)
-            ->withCount(['tickets as waiting' => fn ($q) => $q
-                ->where('status', 'waiting')->whereDate('created_at', today())])
+            ->withCount([
+                'tickets as waiting' => fn ($q) => $q
+                    ->where('status', 'waiting')->whereDate('created_at', today()),
+                'tickets as waiting_priority' => fn ($q) => $q
+                    ->where('status', 'waiting')->where('priority', true)->whereDate('created_at', today()),
+            ])
             ->get()
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'waiting' => $s->waiting])
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'waiting' => $s->waiting,
+                'priority' => $s->waiting_priority,
+            ])
             ->values();
 
         return ['calls' => $calls, 'waiting' => $waiting];

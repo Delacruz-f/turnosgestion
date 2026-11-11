@@ -48,10 +48,28 @@ class AgentController extends Controller
         }
 
         $ticket = DB::transaction(function () use ($counter) {
-            $t = Ticket::where('service_id', $counter->service_id)
+            // Se bloquean las filas en espera para que dos ventanillas no tomen el mismo turno.
+            $waiting = Ticket::where('service_id', $counter->service_id)
                 ->where('status', 'waiting')
                 ->whereDate('created_at', today())
-                ->orderBy('id')->lockForUpdate()->first();
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($waiting->isEmpty()) {
+                return null;
+            }
+
+            // 1 preferencial por cada 2 normales ya llamados; dentro de cada grupo, por llegada.
+            [$priorityCalled, $normalCalled] = Ticket::calledCounts($counter->service_id, today()->toDateString());
+
+            $priorityQueue = $waiting->where('priority', true)->values();
+            $normalQueue = $waiting->where('priority', false)->values();
+
+            $t = $priorityQueue->isNotEmpty()
+                && Ticket::shouldCallPriorityNow($priorityCalled, $normalCalled)
+                    ? $priorityQueue->first()
+                    : $normalQueue->first();
 
             $t?->update(['status' => 'calling', 'counter_id' => $counter->id, 'called_at' => now()]);
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\DisplayController;
 use App\Http\Controllers\KioskController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 
 // Ciudadano
@@ -18,6 +19,7 @@ Route::get('/pantalla/datos', [DisplayController::class, 'data'])->name('display
 // Personal de ventanilla
 Route::middleware('auth')->prefix('ventanilla')->name('agent.')->group(function () {
     Route::get('/', [AgentController::class, 'panel'])->name('panel');
+    Route::get('/reportes', [ReportController::class, 'index'])->name('reports');
     Route::post('/siguiente', [AgentController::class, 'next'])->name('next');
     Route::post('/repetir', [AgentController::class, 'recall'])->name('recall');
     Route::post('/iniciar', [AgentController::class, 'start'])->name('start');

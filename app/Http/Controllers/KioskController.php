@@ -24,10 +24,11 @@ class KioskController extends Controller
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
             'document' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]+$/'],
+            'priority' => ['nullable', 'boolean'],
         ]);
 
         $service = Service::where('active', true)->findOrFail($data['service_id']);
-        $ticket = Ticket::issue($service, $data['document'] ?? null);
+        $ticket = Ticket::issue($service, $data['document'] ?? null, $request->boolean('priority'));
 
         QueueUpdated::dispatch();
 

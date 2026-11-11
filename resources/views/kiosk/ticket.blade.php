@@ -1,5 +1,9 @@
 @extends('layouts.turnos')
 @section('title', 'Turno ' . $ticket->code)
+@php
+    use App\Support\QrCode;
+    $trackUrl = route('tickets.show', $ticket);
+@endphp
 
 @section('content')
 <header class="bar">
@@ -30,6 +34,9 @@
                 <p class="code" aria-hidden="true">{{ $ticket->code }}</p>
                 <div class="ticket__meta">
                     <span>Emitido a las <b>{{ $ticket->created_at->format('H:i') }}</b></span>
+                    @if ($ticket->priority)
+                        <span>Turno <b>preferencial</b></span>
+                    @endif
                     @if ($ticket->document)
                         <span>Documento <b>{{ $ticket->document }}</b></span>
                     @endif
@@ -44,6 +51,13 @@
             </ol>
 
             <div class="state" id="state" role="status" aria-live="polite"></div>
+
+            <div class="ticket__qr">
+                <div class="qr" role="img" aria-label="Código QR con el enlace para seguir este turno en el celular">
+                    {!! QrCode::svg($trackUrl, 160, 1) !!}
+                </div>
+                <p class="qr__hint">Siga su turno en el celular</p>
+            </div>
         </article>
 
         <div class="ticket-actions">
@@ -58,13 +72,58 @@
 
 @push('scripts')
 <script>
-const initial = @json(['status' => $ticket->status, 'position' => $position, 'counter' => $ticket->counter?->name]);
+@php
+    $initial = [
+        'status' => $ticket->status,
+        'position' => $position,
+        'counter' => $ticket->counter?->name,
+        'code' => $ticket->code,
+    ];
+@endphp
+const initial = @json($initial);
 const statusUrl = @json(route('tickets.status', $ticket));
+const code = @json($ticket->code);
+const baseTitle = @json('Turno ' . $ticket->code);
 const box = document.getElementById('ticket'), state = document.getElementById('state');
 const steps = Array.from(document.querySelectorAll('#steps li'));
 
 const ORDER = ['waiting', 'calling', 'serving', 'done'];
+let lastStatus = initial.status;
+let interacted = false;   // el navegador solo permite audio tras un gesto del usuario
+let audioCtx = null;
 
+// ---------------------------------------------------------------- Audio
+function getCtx() {
+    if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        audioCtx = new Ctx();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    return audioCtx;
+}
+
+/** Timbre corto y ascendente al estilo del mostrador (más breve que el de la TV). */
+function chime() {
+    const ctx = getCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [[988, 0], [1319, 0.16]].forEach(([freq, offset]) => {
+        const start = now + offset;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.3);
+    });
+}
+
+// ---------------------------------------------------------------- Render
 function render(d) {
     box.className = 'ticket ' + d.status;
     const p = d.position;
@@ -84,11 +143,26 @@ function render(d) {
         li.classList.toggle('is-current', i === reached);
     });
 
-    if (d.status === 'calling' && navigator.vibrate) navigator.vibrate([300, 150, 300]);
+    // Solo al TRANSICIÓN a "calling" (no en cada refresco).
+    if (d.status === 'calling' && lastStatus !== 'calling') {
+        document.title = `¡Es tu turno! ${d.code ?? code}`;
+        if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+        if (interacted) chime();
+    } else if (d.status !== 'calling') {
+        document.title = baseTitle;
+    }
+
+    lastStatus = d.status;
 }
+
 render(initial);
 
+// ---------------------------------------------------------------- Interacción
 document.getElementById('print').addEventListener('click', () => window.print());
+
+// Cualquier toque del usuario habilita el audio (política de autoplay).
+['pointerdown', 'keydown', 'touchstart'].forEach(evt =>
+    document.addEventListener(evt, () => { interacted = true; getCtx(); }, { once: true, passive: true }));
 
 document.addEventListener('DOMContentLoaded', () => {
     const refresh = () => fetch(statusUrl).then(r => r.json()).then(render);
